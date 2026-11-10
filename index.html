@@ -10,8 +10,11 @@
   Hot Tub Strip Reader
 
   VERSION HISTORY  (newest first — the artifact's version history also keeps every publish)
-  v1.2.0  2026-11-09  Standalone build for GitHub Pages: full HTML document, keys saved in this
-                      browser (localStorage). Claude-artifact account sync stays dormant here.
+  v1.3.0  2026-11-09  Separate "Take photo" (camera) and "Gallery" buttons for strip and bottle.
+                      OK brackets from the bottle: each row stores its OK range, swatches in
+                      range get a bracket like the label, Low/OK/High and the dose plan use it.
+                      Key builder: mark which swatches are under the OK bracket.
+  v1.2.0  2026-11-09  Standalone build published to GitHub Pages (keys saved in the browser there).
   v1.1.1  2026-11-09  Photo fix: file inputs no longer display:none and no forced camera
                       capture (some app views refused to open the picker). Added paste-an-image.
   v1.1.0  2026-11-09  Color keys: build a key from a photo of any brand's bottle (tap white
@@ -84,6 +87,10 @@ canvas{display:block;width:100%;height:auto;touch-action:manipulation;cursor:cro
 .sw button i{display:block;width:40px;height:28px;border-radius:7px;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
 .sw button[aria-pressed=true] i{border-color:var(--fg)}
 .sw button[aria-pressed=true]{color:var(--fg);font-weight:700}
+.okgroup{position:relative;display:flex;gap:6px;align-items:flex-end;padding:0 4px 14px;border:2px solid var(--muted);border-top:0;border-radius:0 0 8px 8px;margin-bottom:2px}
+.okgroup::after{content:"OK";position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);background:var(--surface);color:var(--muted);font:700 10px var(--display);letter-spacing:.08em;padding:0 5px}
+.oktick{display:inline-flex;align-items:center;gap:4px;font:600 12px var(--display);color:var(--muted);cursor:pointer;white-space:nowrap}
+.oktick input{width:18px;height:18px;accent-color:var(--brand)}
 .sampled{width:22px;height:22px;border-radius:5px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
 .range{font-size:12px;color:var(--muted);font-weight:400;font-family:var(--body)}
 ol.plan{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:10px}
@@ -175,7 +182,11 @@ footer{font:500 11px var(--mono);color:var(--muted);text-align:center}
       <div class="step"><span class="n">2</span><div>
         <div class="row between">
           <span class="hint">Photo of the chart on the bottle, straight on, in daylight.</span>
-          <label class="btn ghost sm" for="bFile">Photo of bottle</label>
+          <div class="row">
+            <label class="btn sm" for="bCam"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="4"/></svg>Take photo</label>
+            <label class="btn ghost sm" for="bFile"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/></svg>Gallery</label>
+          </div>
+          <input id="bCam" class="vh" type="file" accept="image/*" capture="environment">
           <input id="bFile" class="vh" type="file" accept="image/*">
         </div>
         <div class="photo" id="bPhoto" hidden><canvas id="bCv"></canvas></div>
@@ -194,7 +205,7 @@ footer{font:500 11px var(--mono);color:var(--muted);text-align:center}
             <input id="bOther" type="text" maxlength="30" placeholder="e.g. Copper">
           </label>
         </div>
-        <p class="hint">Tap each swatch in this row on the photo, lowest to highest, then type the number printed above it. A range like 30-50 is fine.</p>
+        <p class="hint">Tap each swatch in this row on the photo, lowest to highest, then type the number printed above it (a range like 30-50 is fine). Tick <b>OK</b> on the swatches under the bottle's OK bracket.</p>
         <div class="swlist" id="bSwList"></div>
         <div class="row">
           <button class="btn sm" id="bAddRow" type="button">Save row</button>
@@ -218,10 +229,11 @@ footer{font:500 11px var(--mono);color:var(--muted);text-align:center}
   <section class="panel" aria-label="Photo sampler">
     <div class="row between">
       <h2>Read strip from photo</h2>
-      <label class="btn" for="file">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="4"/></svg>
-        Photo of strip
-      </label>
+      <div class="row">
+        <label class="btn" for="cam"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="4"/></svg>Take photo</label>
+        <label class="btn ghost" for="file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/></svg>Gallery</label>
+      </div>
+      <input id="cam" class="vh" type="file" accept="image/*" capture="environment">
       <input id="file" class="vh" type="file" accept="image/*">
     </div>
     <p class="hint">Lay the strip on a white surface in daylight, ~15 seconds after dipping. Tap the white handle once, then tap each pad. Each tap fills the highlighted reading and moves to the next.</p>
@@ -240,7 +252,7 @@ footer{font:500 11px var(--mono);color:var(--muted);text-align:center}
     <p class="hint">Doses are starting amounts for common products (baking soda, soda ash, dry acid, calcium chloride, dichlor). Add with jets running, wait 20–30 min, retest. Product labels win if they differ.</p>
   </section>
 
-    <footer>v1.2.0 · 2026-11-09</footer>
+    <footer>v1.3.0 · 2026-11-09</footer>
 </div>
 
 <script>
@@ -257,13 +269,13 @@ const CATALOG = {
 
 /* ---------- Built-in key (EasyTest bottle) ---------- */
 const BUILTIN = {id:'builtin-easytest', name:'EasyTest 7-way (built in)', builtin:true, rows:[
-  {param:'hard', sw:[[0,'#d6ebe8'],[100,'#a9a9d6'],[250,'#9a95d0'],[500,'#8a7cc4'],[1000,'#6d55a6']]},
-  {param:'fc',   sw:[[0,'#fbfaf8'],[0.5,'#eedde9'],[1,'#e4c6df'],[3,'#b884c0'],[5,'#9f61a7'],[10,'#8a2d84']]},
-  {param:'br',   sw:[[0,'#fbfaf8'],[1,'#ecdce8'],[2,'#dccbe3'],[6,'#ac82bd'],[10,'#9a63a8'],[20,'#8a2d80']]},
-  {param:'tc',   sw:[[0,'#f8f3ea'],[0.5,'#f2d4d3'],[1,'#eaa9c1'],[3,'#d65fa3'],[5,'#b8337f'],[10,'#9a1f6e']]},
-  {param:'cya',  sw:[[0,'#f6b083'],[40,'#f4a998','30–50'],[100,'#f1a3a3'],[150,'#ea8f98'],[240,'#c48aa2']]},
-  {param:'ta',   sw:[[0,'#ece36c'],[40,'#bfe08a'],[80,'#9fdc9a'],[120,'#55c39a'],[180,'#34ab93'],[240,'#2c9d9d']]},
-  {param:'ph',   sw:[[6.2,'#f2b73a'],[6.8,'#f39a4a'],[7.2,'#f28a46'],[7.8,'#f06e3e'],[8.4,'#ec4f3a'],[9.0,'#e83b3b']]},
+  {param:'hard', ok:[250,500], sw:[[0,'#d6ebe8'],[100,'#a9a9d6'],[250,'#9a95d0'],[500,'#8a7cc4'],[1000,'#6d55a6']]},
+  {param:'fc', ok:[1,3],   sw:[[0,'#fbfaf8'],[0.5,'#eedde9'],[1,'#e4c6df'],[3,'#b884c0'],[5,'#9f61a7'],[10,'#8a2d84']]},
+  {param:'br', ok:[2,6],   sw:[[0,'#fbfaf8'],[1,'#ecdce8'],[2,'#dccbe3'],[6,'#ac82bd'],[10,'#9a63a8'],[20,'#8a2d80']]},
+  {param:'tc', ok:[1,3],   sw:[[0,'#f8f3ea'],[0.5,'#f2d4d3'],[1,'#eaa9c1'],[3,'#d65fa3'],[5,'#b8337f'],[10,'#9a1f6e']]},
+  {param:'cya', ok:[40,100],  sw:[[0,'#f6b083'],[40,'#f4a998','30–50'],[100,'#f1a3a3'],[150,'#ea8f98'],[240,'#c48aa2']]},
+  {param:'ta', ok:[80,120],   sw:[[0,'#ece36c'],[40,'#bfe08a'],[80,'#9fdc9a'],[120,'#55c39a'],[180,'#34ab93'],[240,'#2c9d9d']]},
+  {param:'ph', ok:[7.2,7.8],   sw:[[6.2,'#f2b73a'],[6.8,'#f39a4a'],[7.2,'#f28a46'],[7.8,'#f06e3e'],[8.4,'#ec4f3a'],[9.0,'#e83b3b']]},
 ]};
 const EXAMPLE = {hard:250, fc:1, tc:3, cya:40, ta:80, ph:7.8};
 
@@ -335,14 +347,20 @@ function drawMarks(ctx,cv,img,marks){
     ctx.strokeStyle='#1f6f5c';ctx.lineWidth/=2;ctx.stroke()});
 }
 
+/* ---------- OK ranges (from the bottle's bracket) ---------- */
+const okOf = r => r && (r.ok || CATALOG[r.param]?.target) || null;
+const swLabel = (r,v,end) => { const s=r.sw.find(x=>x[0]===v); const l=s?.[2]; if(!l) return String(v); const parts=l.split('–'); return end==='hi'?parts[parts.length-1]:parts[0]; };
+function okText(r){ const ok=okOf(r); if(!ok) return 'no OK range';
+  const u=CATALOG[r.param]?.unit; return `OK ${swLabel(r,ok[0],'lo')}–${swLabel(r,ok[1],'hi')}${u?' '+u:''}`; }
+
 /* ---------- Status ---------- */
 function status(r,v){
   if(v==null) return ['na','—'];
-  const c=CATALOG[r.param]; if(!c) return ['na','Read'];
   if(r.param==='cya'&&san==='br') return v>0?['high','High']:['ok','OK'];
-  const [lo,hi]=c.target;
-  if(v<lo) return [ (r.param==='fc'||r.param==='br'||r.param==='ph') && v<lo*0.5 ? 'bad':'low','Low'];
-  if(v>hi) return [ (r.param==='ph'&&v>8.2)||((r.param==='fc'||r.param==='br')&&v>=10) ? 'bad':'high','High'];
+  const ok=okOf(r); if(!ok) return ['na','Read'];
+  const [lo,hi]=ok;
+  if(v<lo) return [ ((r.param==='fc'||r.param==='br')&&v===0)||(r.param==='ph'&&v<=6.8) ? 'bad':'low','Low'];
+  if(v>hi) return [ (r.param==='ph'&&v>=8.4)||((r.param==='fc'||r.param==='br')&&v>=10) ? 'bad':'high','High'];
   return ['ok','OK'];
 }
 
@@ -351,7 +369,7 @@ function renderReadings(){
   const box=$('readings'); box.innerHTML='';
   activeRows().forEach(r=>{
     const id=rowKey(r), v=vals[id], [cls,label]=status(r,v), c=CATALOG[r.param];
-    const tgt = !c ? 'no target set' : r.param==='cya' ? (san==='cl'?'target 30–50 ppm':'not used w/ bromine') : `target ${c.target[0]}–${c.target[1]}${c.unit?' '+c.unit:''}`;
+    const tgt = r.param==='cya'&&san==='br' ? 'not used w/ bromine' : okText(r);
     const lab = v==null?'—':(r.sw.find(s=>s[0]===v&&s[2])?.[2] ?? v);
     const el=document.createElement('div'); el.className='reading';
     el.innerHTML=`<div class="name"></div>
@@ -359,14 +377,16 @@ function renderReadings(){
         <span>${lab}</span><span class="pill ${cls}">${label}</span></div><div class="sw"></div>`;
     el.querySelector('.name').append(rowName(r)); const sp=document.createElement('span'); sp.className='range'; sp.textContent=tgt; el.querySelector('.name').append(sp);
     let nearest=null; if(v!=null){let d=1e9;r.sw.forEach((s,i)=>{const dd=Math.abs(s[0]-v);if(dd<d){d=dd;nearest=i}})}
-    const sw=el.querySelector('.sw');
+    const sw=el.querySelector('.sw'), ok=r.ok;
+    let grp=null;
     r.sw.forEach((s,i)=>{
       const b=document.createElement('button'); b.type='button';
       b.setAttribute('aria-pressed', i===nearest?'true':'false');
       b.setAttribute('aria-label',`${rowName(r)} ${s[2]||s[0]}`);
       b.innerHTML=`<i style="background:${s[1]}"></i>${s[2]||s[0]}`;
       b.onclick=()=>{vals[id]=s[0]; delete sampled[id]; clearExample(); render()};
-      sw.appendChild(b);
+      if(ok && s[0]>=ok[0] && s[0]<=ok[1]){ if(!grp){grp=document.createElement('div');grp.className='okgroup';sw.appendChild(grp)} grp.appendChild(b); }
+      else sw.appendChild(b);
     });
     box.appendChild(el);
   });
@@ -380,23 +400,27 @@ function renderPlan(){
   const has = new Set(activeRows().map(r=>r.param));
   const g = Object.fromEntries(Object.keys(CATALOG).map(p=>[p, has.has(p)?vals[p]??null:null]));
   const steps=[], ta=g.ta, ph=g.ph, hd=g.hard;
-  if(ta!=null && ta<80){const d=2.4*k()*((90-ta)/10);steps.push(`<b>Raise alkalinity</b> to ~90 with baking soda: <span class="dose">${oz(d)} ${tsp(d,0.18)}</span>. Do this first; it steadies pH.`)}
-  if(ta!=null && ta>120){const d=3.4*k()*((ta-100)/10);steps.push(`<b>Lower alkalinity</b> toward 100 with dry acid, split into 2–3 doses a few hours apart: <span class="dose">${oz(d)} total</span>. Pour into the footwell with jets off, then run jets.`)}
-  if(ph!=null && ph<7.2 && !(ta!=null&&ta<80)){const d=0.6*k()*Math.ceil((7.4-ph)/0.2);steps.push(`<b>Raise pH</b> with soda ash (pH up): <span class="dose">${oz(d)} ${tsp(d,0.17)}</span>.`)}
-  if(ph!=null && ph<7.2 && ta!=null && ta<80) steps.push(`<b>Recheck pH</b> after the baking soda. Low TA usually drags pH down; add pH up only if it is still under 7.2.`);
-  if(ph!=null && ph>7.8){const d=0.8*k()*Math.ceil((ph-7.5)/0.2);steps.push(`<b>Lower pH</b> with dry acid (pH down): <span class="dose">${oz(d)} ${tsp(d,0.2)}</span>. Retest before adding more.`)}
-  if(hd!=null && hd<150){const d=2*k()*((175-hd)/10);steps.push(`<b>Raise hardness</b> with calcium chloride (hardness up): <span class="dose">${oz(d)}</span>. Low calcium in hot water can etch heater parts and cause foam.`)}
-  if(hd!=null && hd>400) steps.push(`<b>Hardness is high.</b> Expect scale on the heater and jets. Use a scale/stain sequestrant now and partially drain/refill at the next water change.`);
+  const rowOf=p=>activeRows().find(r=>r.param===p);
+  const R=p=>okOf(rowOf(p))||CATALOG[p].target, mid=p=>{const [a,b]=R(p);return (a+b)/2};
+  const [taL,taH]=R('ta'), [phL,phH]=R('ph'), [hdL,hdH]=R('hard');
+  const lowTA = ta!=null && ta<taL;
+  if(lowTA){const t=Math.round(mid('ta')),d=2.4*k()*((t-ta)/10);steps.push(`<b>Raise alkalinity</b> to ~${t} with baking soda: <span class="dose">${oz(d)} ${tsp(d,0.18)}</span>. Do this first; it steadies pH.`)}
+  if(ta!=null && ta>taH){const t=Math.round(mid('ta')),d=3.4*k()*((ta-t)/10);steps.push(`<b>Lower alkalinity</b> toward ${t} with dry acid, split into 2–3 doses a few hours apart: <span class="dose">${oz(d)} total</span>. Pour into the footwell with jets off, then run jets.`)}
+  if(ph!=null && ph<phL && !lowTA){const d=0.6*k()*Math.ceil((mid('ph')-ph)/0.2);steps.push(`<b>Raise pH</b> with soda ash (pH up): <span class="dose">${oz(d)} ${tsp(d,0.17)}</span>.`)}
+  if(ph!=null && ph<phL && lowTA) steps.push(`<b>Recheck pH</b> after the baking soda. Low TA usually drags pH down; add pH up only if it is still under ${phL}.`);
+  if(ph!=null && ph>phH){const d=0.8*k()*Math.ceil((ph-mid('ph'))/0.2);steps.push(`<b>Lower pH</b> with dry acid (pH down): <span class="dose">${oz(d)} ${tsp(d,0.2)}</span>. Retest before adding more.`)}
+  if(hd!=null && hd<hdL){const t=Math.round(hdL+(hdH-hdL)*0.2),d=2*k()*((t-hd)/10);steps.push(`<b>Raise hardness</b> to ~${t} with calcium chloride (hardness up): <span class="dose">${oz(d)}</span>. Low calcium in hot water can etch heater parts and cause foam.`)}
+  if(hd!=null && hd>hdH) steps.push(`<b>Hardness is high.</b> Expect scale on the heater and jets. Use a scale/stain sequestrant now and partially drain/refill at the next water change.`);
   if(san==='cl'){
-    const fc=g.fc, tc=g.tc;
-    if(fc!=null && fc<3){const d=0.24*k()*(4-fc);steps.push(`<b>Raise free chlorine</b> to ~4 with dichlor: <span class="dose">${oz(d)} ${tsp(d,0.2)}</span>.`)}
-    if(fc!=null && fc>5) steps.push(`<b>Chlorine is ${fc>=10?'very ':''}high.</b> Leave the cover open with jets running and stay out until it drops under 5.`);
+    const fc=g.fc, tc=g.tc, [fcL,fcH]=R('fc');
+    if(fc!=null && fc<fcL){const t=mid('fc'),d=0.24*k()*(t-fc);steps.push(`<b>Raise free chlorine</b> to ~${+t.toFixed(1)} with dichlor: <span class="dose">${oz(d)} ${tsp(d,0.2)}</span>.`)}
+    if(fc!=null && fc>fcH) steps.push(`<b>Chlorine is ${fc>=10?'very ':''}high.</b> Leave the cover open with jets running and stay out until it reads ${fcH} or under.`);
     if(fc!=null && tc!=null && tc-fc>0.5){const d=0.24*k()*(10-(fc||0));steps.push(`<b>Shock it.</b> Combined chlorine is ${(tc-fc).toFixed(1)} ppm (total minus free). That's spent chlorine causing the chlorine smell. Shock to ~10 ppm with dichlor: <span class="dose">${oz(d)}</span>, or use non-chlorine shock (MPS) per its label. Cover open 20 min.`)}
-    if(g.cya!=null && g.cya>=100) steps.push(`<b>Cyanuric acid is high.</b> It weakens chlorine and only comes out by draining. Plan a partial drain/refill, or switch to unstabilized chlorine for a while.`);
+    if(g.cya!=null && g.cya>R('cya')[1]) steps.push(`<b>Cyanuric acid is high.</b> It weakens chlorine and only comes out by draining. Plan a partial drain/refill, or switch to unstabilized chlorine for a while.`);
   } else {
-    const br=g.br;
-    if(br!=null && br<3) steps.push(`<b>Raise bromine.</b> Check the floater/feeder has tablets and open it a notch, then add MPS shock per its label to reactivate the bromide bank.`);
-    if(br!=null && br>6) steps.push(`<b>Bromine is high.</b> Close the floater down a setting and leave the cover open with jets on until it reads under 6.`);
+    const br=g.br, [brL,brH]=R('br');
+    if(br!=null && br<brL) steps.push(`<b>Raise bromine.</b> Check the floater/feeder has tablets and open it a notch, then add MPS shock per its label to reactivate the bromide bank.`);
+    if(br!=null && br>brH) steps.push(`<b>Bromine is high.</b> Close the floater down a setting and leave the cover open with jets on until it reads ${brH} or under.`);
   }
   const any = activeRows().some(r=>vals[rowKey(r)]!=null);
   $('plan').innerHTML = steps.length ? `<ol class="plan">${steps.map(s=>`<li>${s}</li>`).join('')}</ol>`
@@ -421,7 +445,7 @@ function loadStrip(f){
   loadPhoto(f,cv,im=>{img=im;marks=[];white=null;targetIdx=0;drawMarks(ctx,cv,img,marks);
     $('photoBox').hidden=false;$('targets').hidden=false;renderTargets()});
 }
-$('file').addEventListener('change',e=>{const f=e.target.files[0]; if(f) loadStrip(f); e.target.value=''});
+['file','cam'].forEach(id=>$(id).addEventListener('change',e=>{const f=e.target.files[0]; if(f) loadStrip(f); e.target.value=''}));
 cv.addEventListener('click',e=>{
   if(!img) return;
   const [x,y]=canvasPoint(cv,e), rad=Math.max(4,Math.round(cv.width/120));
@@ -490,18 +514,21 @@ function renderBuilder(){
     r.innerHTML=`<i style="background:${s.hex}"></i>`;
     const inp=document.createElement('input'); inp.type='text'; inp.inputMode='decimal'; inp.id='bsw'+i; inp.placeholder='value'; inp.value=s.text;
     inp.oninput=()=>{s.text=inp.value};
+    const okl=document.createElement('label'); okl.className='oktick'; okl.htmlFor='bok'+i;
+    const okc=document.createElement('input'); okc.type='checkbox'; okc.id='bok'+i; okc.checked=!!s.ok; okc.onchange=()=>{s.ok=okc.checked};
+    okl.append(okc,'OK');
     const x=document.createElement('button'); x.type='button'; x.className='x'; x.textContent='×'; x.setAttribute('aria-label','Remove swatch');
     x.onclick=()=>{B.cur.sw.splice(i,1); B.marks=B.marks.filter(m=>m.sw!==s); if(B.img)drawMarks(bCtx,bCv,B.img,B.marks); renderBuilder()};
-    r.append(inp,x); list.appendChild(r);
+    r.append(inp,okl,x); list.appendChild(r);
   });
   const rows=$('bRows'); rows.innerHTML='';
   $('bRowsHint').textContent = B.rows.length?`Rows in this key (${B.rows.length})`:'No rows saved yet.';
   B.rows.forEach((row,i)=>{
     const d=document.createElement('div'); d.className='rowsum';
     const b=document.createElement('b'); b.textContent=rowName(row);
-    const st=document.createElement('div'); st.className='strip'; row.sw.forEach(s=>{const c=document.createElement('i');c.style.background=s[1];c.title=s[2]||s[0];st.appendChild(c)});
+    const st=document.createElement('div'); st.className='strip'; row.sw.forEach(s=>{const c=document.createElement('i');c.style.background=s[1];c.title=s[2]||s[0];if(row.ok&&s[0]>=row.ok[0]&&s[0]<=row.ok[1])c.style.outline='2px solid var(--ok)';st.appendChild(c)});
     const ed=document.createElement('button'); ed.type='button'; ed.className='btn ghost sm'; ed.textContent='Redo';
-    ed.onclick=()=>{B.cur={param:row.param,label:row.label||'',sw:row.sw.map(s=>({hex:s[1],text:s[2]?s[2].replace('–','-'):String(s[0])}))}; B.rows.splice(i,1); renderBuilder()};
+    ed.onclick=()=>{B.cur={param:row.param,label:row.label||'',sw:row.sw.map(s=>({hex:s[1],text:s[2]?s[2].replace('–','-'):String(s[0]),ok:!!row.ok&&s[0]>=row.ok[0]&&s[0]<=row.ok[1]}))}; B.rows.splice(i,1); renderBuilder()};
     const x=document.createElement('button'); x.type='button'; x.className='x'; x.textContent='×'; x.setAttribute('aria-label','Remove row');
     x.onclick=()=>{B.rows.splice(i,1);renderBuilder()};
     d.append(b,st,ed,x); rows.appendChild(d);
@@ -519,7 +546,7 @@ function loadBottle(f){
   loadPhoto(f,bCv,im=>{B.img=im;B.marks=[];B.white=null;$('bWhiteDot').style.background='transparent';
     drawMarks(bCtx,bCv,B.img,B.marks);$('bPhoto').hidden=false;$('bMode').hidden=false;setMode('white');renderBuilder()});
 }
-$('bFile').addEventListener('change',e=>{const f=e.target.files[0]; if(f) loadBottle(f); e.target.value=''});
+['bFile','bCam'].forEach(id=>$(id).addEventListener('change',e=>{const f=e.target.files[0]; if(f) loadBottle(f); e.target.value=''}));
 document.addEventListener('paste',e=>{
   const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/')); if(!it) return;
   const f=it.getAsFile(); if(!f) return; e.preventDefault();
@@ -548,7 +575,8 @@ $('bAddRow').onclick=()=>{
   if(c.param==='other'&&!c.label.trim()) return rowMsg('Name this row.');
   if(B.rows.some(r=>r.param===c.param && c.param!=='other')) return rowMsg(`${CATALOG[c.param].name} is already in this key. Redo that row instead.`);
   const sw=c.sw.map((s,i)=>parsed[i].label?[parsed[i].v,s.hex,parsed[i].label]:[parsed[i].v,s.hex]).sort((a,b)=>a[0]-b[0]);
-  const row={param:c.param,sw}; if(c.param==='other') row.label=c.label.trim();
+  const okv=c.sw.map((s,i)=>s.ok?parsed[i].v:null).filter(v=>v!=null);
+  const row={param:c.param,sw}; if(okv.length) row.ok=[Math.min(...okv),Math.max(...okv)]; if(c.param==='other') row.label=c.label.trim();
   B.rows.push(row);
   B.marks=B.marks.filter(m=>!c.sw.includes(m.sw)); if(B.img)drawMarks(bCtx,bCv,B.img,B.marks);
   rowMsg(''); pickNextParam(); renderBuilder();
