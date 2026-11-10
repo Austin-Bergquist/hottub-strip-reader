@@ -10,6 +10,8 @@
   Hot Tub Strip Reader
 
   VERSION HISTORY  (newest first — the artifact's version history also keeps every publish)
+  v1.3.1  2026-11-09  Strip-photo selector: each test is a full-width row showing its whole color
+                      scale (OK swatches bracketed), the color you tapped, and the value read.
   v1.3.0  2026-11-09  Separate "Take photo" (camera) and "Gallery" buttons for strip and bottle.
                       OK brackets from the bottle: each row stores its OK range, swatches in
                       range get a bracket like the label, Low/OK/High and the dose plan use it.
@@ -91,6 +93,17 @@ canvas{display:block;width:100%;height:auto;touch-action:manipulation;cursor:cro
 .okgroup::after{content:"OK";position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);background:var(--surface);color:var(--muted);font:700 10px var(--display);letter-spacing:.08em;padding:0 5px}
 .oktick{display:inline-flex;align-items:center;gap:4px;font:600 12px var(--display);color:var(--muted);cursor:pointer;white-space:nowrap}
 .oktick input{width:18px;height:18px;accent-color:var(--brand)}
+.tlist{display:flex;flex-direction:column;gap:6px}
+.tlist button{display:grid;grid-template-columns:minmax(0,7.5em) 1fr auto;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;font:600 13px var(--display)}
+.tlist button[aria-pressed=true]{border:2px solid var(--brand);background:var(--brand-soft)}
+.tlist .tname{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.tlist .tname small{font:500 11px var(--body);color:var(--brand)}
+.tlist .scale{display:flex;gap:3px;flex-wrap:wrap;align-items:flex-end;min-width:0}
+.tlist .scale i{width:18px;height:18px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.tlist .scale .okb{display:flex;gap:3px;padding:0 2px 3px;border:2px solid var(--muted);border-top:0;border-radius:0 0 5px 5px}
+.tlist .got{display:flex;align-items:center;gap:6px;font:500 13px var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tlist .got span.sampled{width:20px;height:20px}
+.tlist .got .none{width:20px;height:20px;border-radius:5px;border:1.5px dashed var(--line)}
 .sampled{width:22px;height:22px;border-radius:5px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
 .range{font-size:12px;color:var(--muted);font-weight:400;font-family:var(--body)}
 ol.plan{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:10px}
@@ -238,7 +251,7 @@ footer{font:500 11px var(--mono);color:var(--muted);text-align:center}
     </div>
     <p class="hint">Lay the strip on a white surface in daylight, ~15 seconds after dipping. Tap the white handle once, then tap each pad. Each tap fills the highlighted reading and moves to the next.</p>
     <div class="photo" id="photoBox" hidden><canvas id="cv"></canvas></div>
-    <div class="chips" id="targets" hidden></div>
+    <div class="tlist" id="targets" hidden></div>
   </section>
 
   <section class="panel" aria-label="Readings">
@@ -252,7 +265,7 @@ footer{font:500 11px var(--mono);color:var(--muted);text-align:center}
     <p class="hint">Doses are starting amounts for common products (baking soda, soda ash, dry acid, calcium chloride, dichlor). Add with jets running, wait 20–30 min, retest. Product labels win if they differ.</p>
   </section>
 
-    <footer>v1.3.0 · 2026-11-09</footer>
+    <footer>v1.3.1 · 2026-11-09</footer>
 </div>
 
 <script>
@@ -434,9 +447,19 @@ const targetList = () => [{white:true,name:'White ref'}, ...activeRows()];
 function renderTargets(){
   const t=$('targets'); t.innerHTML='';
   targetList().forEach((r,i)=>{
-    const b=document.createElement('button'); b.type='button'; b.setAttribute('aria-pressed', i===targetIdx?'true':'false');
-    const c = r.white ? (white?rgb2hex(white):null) : (sampled[rowKey(r)]?rgb2hex(sampled[rowKey(r)]):null);
-    b.innerHTML=`<span class="dot" style="background:${c||'transparent'}"></span>`; b.append(r.white?r.name:rowName(r));
+    const b=document.createElement('button'); b.type='button'; const on=i===targetIdx; b.setAttribute('aria-pressed', on?'true':'false');
+    const nm=document.createElement('span'); nm.className='tname'; nm.append(r.white?'White ref':rowName(r));
+    if(on){const sm=document.createElement('small'); sm.textContent=r.white?'Tap the white handle':'Tap this pad next'; nm.append(sm)}
+    const sc=document.createElement('span'); sc.className='scale';
+    if(r.white){ const w=document.createElement('i'); w.style.background='#ffffff'; sc.append(w) }
+    else { let g=null; r.sw.forEach(s=>{ const c=document.createElement('i'); c.style.background=s[1]; c.title=s[2]||s[0];
+      if(r.ok&&s[0]>=r.ok[0]&&s[0]<=r.ok[1]){ if(!g){g=document.createElement('span');g.className='okb';sc.append(g)} g.append(c) } else sc.append(c) }) }
+    const got=document.createElement('span'); got.className='got';
+    const col = r.white ? white : sampled[rowKey(r)];
+    if(col){ const d=document.createElement('span'); d.className='sampled'; d.style.background=rgb2hex(col); got.append(d);
+      if(!r.white){ const v=vals[rowKey(r)]; got.append(v==null?'':String(r.sw.find(s=>s[0]===v&&s[2])?.[2]??v)) } }
+    else { const d=document.createElement('span'); d.className='none'; got.append(d) }
+    b.append(nm,sc,got);
     b.onclick=()=>{targetIdx=i;renderTargets()};
     t.appendChild(b);
   });
