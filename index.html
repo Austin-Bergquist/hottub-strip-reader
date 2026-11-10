@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f6f5c">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Hot Tub Strip Reader</title>
+<!--
+  Hot Tub Strip Reader
+
+  VERSION HISTORY  (newest first — the artifact's version history also keeps every publish)
+  v1.2.0  2026-11-09  Standalone build for GitHub Pages: full HTML document, keys saved in this
+                      browser (localStorage). Claude-artifact account sync stays dormant here.
+  v1.1.1  2026-11-09  Photo fix: file inputs no longer display:none and no forced camera
+                      capture (some app views refused to open the picker). Added paste-an-image.
+  v1.1.0  2026-11-09  Color keys: build a key from a photo of any brand's bottle (tap white
+                      ref, pick a test, tap its swatches, enter values), save/edit/delete keys,
+                      choose the active key. EasyTest 7-way kept as the built-in key. Keys are
+                      saved to your account (db) with a local copy as backup.
+  v1.0.0  2026-11-09  Initial build: swatch tap entry, photo tap-sampling with white
+                      reference, Lab color matching w/ interpolation, chlorine/bromine
+                      mode, hot tub targets, dose plan scaled to tub volume.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: single instrument column — setup, color key, photo sampler, readings, action plan */
+:root{
+  --brand:#1f6f5c; --brand-soft:#e2efeb; --bg:#f4f7f6; --surface:#ffffff; --fg:#14211d; --muted:#5b6b66; --line:#d7e1de;
+  --ok:#1f8a5a; --warn:#b7791f; --bad:#c2412d;
+  --display:"Chakra Petch",ui-sans-serif,system-ui,sans-serif;
+  --body:"Inter",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --brand:#46b394; --brand-soft:#173a32; --bg:#0e1614; --surface:#152220; --fg:#e4efec; --muted:#93a8a2;
+  --line:#2a3d38; --ok:#4cc38a; --warn:#e0a84a; --bad:#ef7660; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --brand:#46b394; --brand-soft:#173a32; --bg:#0e1614; --surface:#152220; --fg:#e4efec; --muted:#93a8a2;
+  --line:#2a3d38; --ok:#4cc38a; --warn:#e0a84a; --bad:#ef7660; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.mark{display:flex;align-items:center;gap:8px;color:var(--brand);font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.04em}
+.mark svg{width:30px;height:16px}
+h1{font-family:var(--display);font-weight:700;font-size:26px;margin:0;letter-spacing:.01em;text-wrap:balance}
+h2{font-family:var(--display);font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.08em;margin:0;color:var(--muted)}
+h3{font-family:var(--display);font-weight:600;font-size:14px;margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.between{justify-content:space-between}
+label.f,.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:500}
+input[type=number],input[type=text],select{font:500 15px var(--body);padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);min-width:0}
+input[type=number]{font-family:var(--mono);width:110px}
+select{max-width:100%}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:600 13px var(--display);letter-spacing:.04em;padding:9px 14px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--brand);color:#fff}
+.btn{font:600 14px var(--display);letter-spacing:.04em;padding:9px 14px;border-radius:8px;border:1px solid var(--brand);background:var(--brand);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.btn.ghost{background:transparent;color:var(--brand)}
+.btn.danger{background:transparent;color:var(--bad);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 10px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,label.btn:focus-within{outline:2px solid var(--brand);outline-offset:2px}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.tag{font:600 11px var(--display);letter-spacing:.08em;text-transform:uppercase;background:var(--brand-soft);color:var(--brand);padding:3px 8px;border-radius:999px}
+.photo{position:relative;border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--line)}
+canvas{display:block;width:100%;height:auto;touch-action:manipulation;cursor:crosshair}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{font:600 12px var(--display);letter-spacing:.03em;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,.2);background:transparent;flex:none}
+.chips button[aria-pressed=true]{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+.reading{display:grid;grid-template-columns:1fr auto;gap:8px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.reading:first-child{border-top:0;padding-top:0}
+.reading .name{font-family:var(--display);font-weight:600;font-size:15px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+.reading .val{font:500 18px var(--mono);font-variant-numeric:tabular-nums;text-align:right;display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.pill{font:600 11px var(--display);letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid currentColor}
+.pill.ok{color:var(--ok)}.pill.low,.pill.high{color:var(--warn)}.pill.bad{color:var(--bad)}.pill.na{color:var(--muted)}
+.sw{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end}
+.sw button{display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:0;cursor:pointer;color:var(--muted);font:500 11px var(--mono)}
+.sw button i{display:block;width:40px;height:28px;border-radius:7px;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.sw button[aria-pressed=true] i{border-color:var(--fg)}
+.sw button[aria-pressed=true]{color:var(--fg);font-weight:700}
+.sampled{width:22px;height:22px;border-radius:5px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.range{font-size:12px;color:var(--muted);font-weight:400;font-family:var(--body)}
+ol.plan{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:10px}
+ol.plan b{font-family:var(--display);font-weight:600}
+.dose{font-family:var(--mono);font-size:13px;background:var(--brand-soft);color:var(--brand);padding:1px 6px;border-radius:4px;white-space:nowrap}
+.allgood{color:var(--ok);font-family:var(--display);font-weight:600;margin:0}
+/* key builder */
+.builder{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:12px}
+.step{display:flex;gap:10px;align-items:flex-start}
+.step .n{font:700 12px var(--display);width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;flex:none;margin-top:1px}
+.step > div{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.swlist{display:flex;flex-direction:column;gap:6px}
+.swrow{display:flex;gap:8px;align-items:center}
+.swrow i{width:34px;height:26px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex:none}
+.swrow input{width:96px;font-family:var(--mono)}
+.x{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:4px 8px}
+.rowsum{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.rowsum .strip{display:flex;gap:3px;flex:1;min-width:0;overflow:hidden}
+.rowsum .strip i{width:16px;height:16px;border-radius:4px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.rowsum b{font-family:var(--display);font-weight:600;font-size:13px;white-space:nowrap}
+.msg{font-size:13px;margin:0;color:var(--bad)}
+.msg.ok{color:var(--ok)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}
+footer{font:500 11px var(--mono);color:var(--muted);text-align:center}
+@media (max-width:420px){.sw button i{width:34px;height:24px}}
+@media (prefers-reduced-motion:no-preference){.sw button i{transition:transform .12s}.sw button:hover i{transform:translateY(-2px)}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="mark" aria-label="Austin Bergquist">
+        <svg viewBox="0 0 30 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="miter"><path d="M1 12h6V4h6v8h6V4h6v8h4"/></svg>
+        AUSTIN BERGQUIST
+      </div>
+      <h1>Hot Tub Strip Reader</h1>
+    </div>
+    <span class="tag" id="exTag">Example reading</span>
+  </header>
+
+  <section class="panel" aria-label="Tub setup">
+    <div class="row">
+      <label class="f" for="vol">Tub volume (gal)
+        <input id="vol" type="number" min="50" max="2000" step="10" value="400">
+      </label>
+      <div class="f">Sanitizer
+        <div class="seg" role="group" aria-label="Sanitizer">
+          <button id="sanCl" type="button" aria-pressed="true">Chlorine</button>
+          <button id="sanBr" type="button" aria-pressed="false">Bromine</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Color key -->
+  <section class="panel" aria-label="Color key">
+    <div class="row between">
+      <h2>Color key</h2>
+      <span class="hint" id="keySync"></span>
+    </div>
+    <div class="row">
+      <label class="f" for="keySel" style="flex:1;min-width:180px">Reading against
+        <select id="keySel"></select>
+      </label>
+      <div class="row" style="align-self:flex-end">
+        <button class="btn" id="newKey" type="button">+ New from bottle</button>
+        <button class="btn ghost sm" id="editKey" type="button">Edit</button>
+        <button class="btn danger sm" id="delKey" type="button">Delete</button>
+      </div>
+    </div>
+    <div class="confirm" id="delConfirm" hidden>
+      <span>Delete this key? This can't be undone.</span>
+      <button class="btn danger sm" id="delYes" type="button">Delete key</button>
+      <button class="btn ghost sm" id="delNo" type="button">Keep it</button>
+    </div>
+
+    <div class="builder" id="builder" hidden>
+      <div class="row between"><h3 id="bTitle">New color key</h3><span class="tag">Key builder</span></div>
+
+      <div class="step"><span class="n">1</span><div>
+        <label class="f" for="bName">Brand / name
+          <input id="bName" type="text" placeholder="e.g. AquaChek 7-way" maxlength="40">
+        </label>
+      </div></div>
+
+      <div class="step"><span class="n">2</span><div>
+        <div class="row between">
+          <span class="hint">Photo of the chart on the bottle, straight on, in daylight.</span>
+          <label class="btn ghost sm" for="bFile">Photo of bottle</label>
+          <input id="bFile" class="vh" type="file" accept="image/*">
+        </div>
+        <div class="photo" id="bPhoto" hidden><canvas id="bCv"></canvas></div>
+        <div class="chips" id="bMode" hidden>
+          <button type="button" id="bModeWhite" aria-pressed="true"><span class="dot" id="bWhiteDot"></span>White ref</button>
+          <button type="button" id="bModeSw" aria-pressed="false"><span class="dot" style="background:var(--brand)"></span>Swatches</button>
+        </div>
+      </div></div>
+
+      <div class="step"><span class="n">3</span><div>
+        <div class="row">
+          <label class="f" for="bParam" style="flex:1;min-width:160px">Test row
+            <select id="bParam"></select>
+          </label>
+          <label class="f" for="bOther" id="bOtherWrap" hidden style="flex:1;min-width:140px">Name
+            <input id="bOther" type="text" maxlength="30" placeholder="e.g. Copper">
+          </label>
+        </div>
+        <p class="hint">Tap each swatch in this row on the photo, lowest to highest, then type the number printed above it. A range like 30-50 is fine.</p>
+        <div class="swlist" id="bSwList"></div>
+        <div class="row">
+          <button class="btn sm" id="bAddRow" type="button">Save row</button>
+          <button class="btn ghost sm" id="bClearRow" type="button">Clear row</button>
+        </div>
+        <p class="msg" id="bRowMsg" hidden></p>
+      </div></div>
+
+      <div class="step"><span class="n">4</span><div>
+        <span class="hint" id="bRowsHint">Rows in this key</span>
+        <div class="swlist" id="bRows"></div>
+        <div class="row">
+          <button class="btn" id="bSave" type="button">Save key</button>
+          <button class="btn ghost" id="bCancel" type="button">Cancel</button>
+        </div>
+        <p class="msg" id="bMsg" hidden></p>
+      </div></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Photo sampler">
+    <div class="row between">
+      <h2>Read strip from photo</h2>
+      <label class="btn" for="file">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="4"/></svg>
+        Photo of strip
+      </label>
+      <input id="file" class="vh" type="file" accept="image/*">
+    </div>
+    <p class="hint">Lay the strip on a white surface in daylight, ~15 seconds after dipping. Tap the white handle once, then tap each pad. Each tap fills the highlighted reading and moves to the next.</p>
+    <div class="photo" id="photoBox" hidden><canvas id="cv"></canvas></div>
+    <div class="chips" id="targets" hidden></div>
+  </section>
+
+  <section class="panel" aria-label="Readings">
+    <div class="row between"><h2>Readings</h2><span class="hint">Tap the closest swatch</span></div>
+    <div id="readings"></div>
+  </section>
+
+  <section class="panel" aria-label="Action plan">
+    <h2>What to do</h2>
+    <div id="plan"></div>
+    <p class="hint">Doses are starting amounts for common products (baking soda, soda ash, dry acid, calcium chloride, dichlor). Add with jets running, wait 20–30 min, retest. Product labels win if they differ.</p>
+  </section>
+
+    <footer>v1.2.0 · 2026-11-09</footer>
+</div>
+
+<script>
+/* ---------- Test catalog: what each reading means for a hot tub ---------- */
+const CATALOG = {
+  hard:{name:'Total Hardness', unit:'ppm', target:[150,250]},
+  fc:  {name:'Free Chlorine',  unit:'ppm', target:[3,5], san:'cl'},
+  tc:  {name:'Total Chlorine', unit:'ppm', target:[3,5], san:'cl'},
+  br:  {name:'Bromine',        unit:'ppm', target:[3,5], san:'br'},
+  cya: {name:'Cyanuric Acid',  unit:'ppm', target:[0,50], san:'cl'},
+  ta:  {name:'Total Alkalinity', unit:'ppm', target:[80,120]},
+  ph:  {name:'pH', unit:'', target:[7.2,7.8]},
+};
+
+/* ---------- Built-in key (EasyTest bottle) ---------- */
+const BUILTIN = {id:'builtin-easytest', name:'EasyTest 7-way (built in)', builtin:true, rows:[
+  {param:'hard', sw:[[0,'#d6ebe8'],[100,'#a9a9d6'],[250,'#9a95d0'],[500,'#8a7cc4'],[1000,'#6d55a6']]},
+  {param:'fc',   sw:[[0,'#fbfaf8'],[0.5,'#eedde9'],[1,'#e4c6df'],[3,'#b884c0'],[5,'#9f61a7'],[10,'#8a2d84']]},
+  {param:'br',   sw:[[0,'#fbfaf8'],[1,'#ecdce8'],[2,'#dccbe3'],[6,'#ac82bd'],[10,'#9a63a8'],[20,'#8a2d80']]},
+  {param:'tc',   sw:[[0,'#f8f3ea'],[0.5,'#f2d4d3'],[1,'#eaa9c1'],[3,'#d65fa3'],[5,'#b8337f'],[10,'#9a1f6e']]},
+  {param:'cya',  sw:[[0,'#f6b083'],[40,'#f4a998','30–50'],[100,'#f1a3a3'],[150,'#ea8f98'],[240,'#c48aa2']]},
+  {param:'ta',   sw:[[0,'#ece36c'],[40,'#bfe08a'],[80,'#9fdc9a'],[120,'#55c39a'],[180,'#34ab93'],[240,'#2c9d9d']]},
+  {param:'ph',   sw:[[6.2,'#f2b73a'],[6.8,'#f39a4a'],[7.2,'#f28a46'],[7.8,'#f06e3e'],[8.4,'#ec4f3a'],[9.0,'#e83b3b']]},
+]};
+const EXAMPLE = {hard:250, fc:1, tc:3, cya:40, ta:80, ph:7.8};
+
+/* ---------- Local storage helpers ---------- */
+const store = {get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+               set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+/* ---------- State ---------- */
+let san = store.get('hts.san','cl');
+let vol = store.get('hts.vol',400);
+let keys = store.get('hts.keys',[]);          // custom keys (local mirror)
+let activeId = store.get('hts.active',BUILTIN.id);
+let vals = {...EXAMPLE}, sampled = {}, isExample = true;
+let dbCol = null;                              // db collection for this viewer's keys
+
+const $ = id => document.getElementById(id);
+const allKeys = () => [BUILTIN, ...keys];
+const activeKey = () => allKeys().find(k=>k.id===activeId) || BUILTIN;
+const rowKey = r => r.param==='other' ? 'o_'+(r.label||'other').toLowerCase().replace(/\W+/g,'_') : r.param;
+const rowName = r => r.param==='other' ? (r.label||'Other') : CATALOG[r.param].name;
+const rowVisible = r => !CATALOG[r.param]?.san || CATALOG[r.param].san===san;
+const activeRows = () => activeKey().rows.filter(rowVisible);
+
+/* ---------- Color math ---------- */
+const hex2rgb = h => [1,3,5].map(i=>parseInt(h.substr(i,2),16));
+const rgb2hex = c => '#'+c.map(v=>Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,'0')).join('');
+function rgb2lab([r,g,b]){
+  const f=v=>{v/=255;return v>0.04045?Math.pow((v+0.055)/1.055,2.4):v/12.92};
+  r=f(r);g=f(g);b=f(b);
+  let x=(r*0.4124+g*0.3576+b*0.1805)/0.95047, y=(r*0.2126+g*0.7152+b*0.0722), z=(r*0.0193+g*0.1192+b*0.9505)/1.08883;
+  const k=t=>t>0.008856?Math.cbrt(t):7.787*t+16/116;
+  x=k(x);y=k(y);z=k(z);
+  return [116*y-16,500*(x-y),200*(y-z)];
+}
+/* Nearest segment between neighbouring swatches in Lab; value interpolated along it */
+function matchValue(row, rgb){
+  const L=rgb2lab(rgb), pts=row.sw.map(s=>rgb2lab(hex2rgb(s[1])));
+  if(pts.length===1) return row.sw[0][0];
+  let best={d:1e9,v:row.sw[0][0]};
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1],ab=a.map((_,j)=>b[j]-a[j]),ap=a.map((_,j)=>L[j]-a[j]);
+    const len=ab.reduce((s,v)=>s+v*v,0)||1;
+    const t=Math.max(0,Math.min(1,ap.reduce((s,v,j)=>s+v*ab[j],0)/len));
+    const q=a.map((v,j)=>v+t*ab[j]);
+    const d=Math.hypot(...q.map((v,j)=>v-L[j]));
+    if(d<best.d){best={d,v:row.sw[i][0]+t*(row.sw[i+1][0]-row.sw[i][0])}}
+  }
+  return best.v;
+}
+const round = (id,v) => id==='ph'?Math.round(v*10)/10 : v<2?Math.round(v*10)/10 : v<20?Math.round(v*2)/2 : Math.round(v/5)*5;
+/* Average a square of pixels; optionally scale by a white reference */
+function sampleAt(ctx,x,y,rad,white){
+  const d=ctx.getImageData(Math.max(0,x-rad),Math.max(0,y-rad),rad*2,rad*2).data;
+  let s=[0,0,0],n=0; for(let i=0;i<d.length;i+=4){s[0]+=d[i];s[1]+=d[i+1];s[2]+=d[i+2];n++}
+  let rgb=s.map(v=>v/n);
+  if(white) rgb=rgb.map((v,i)=>Math.min(255,v*248/Math.max(40,white[i])));
+  return rgb;
+}
+function loadPhoto(file,cv,cb){
+  const url=URL.createObjectURL(file), im=new Image();
+  im.onload=()=>{const max=1400,s=Math.min(1,max/Math.max(im.width,im.height));
+    cv.width=Math.round(im.width*s); cv.height=Math.round(im.height*s); cb(im)};
+  im.src=url;
+}
+function canvasPoint(cv,e){const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]}
+function drawMarks(ctx,cv,img,marks){
+  ctx.drawImage(img,0,0,cv.width,cv.height);
+  marks.forEach(m=>{ctx.lineWidth=Math.max(3,cv.width/250);ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(m.x,m.y,m.r,0,7);ctx.stroke();
+    ctx.strokeStyle='#1f6f5c';ctx.lineWidth/=2;ctx.stroke()});
+}
+
+/* ---------- Status ---------- */
+function status(r,v){
+  if(v==null) return ['na','—'];
+  const c=CATALOG[r.param]; if(!c) return ['na','Read'];
+  if(r.param==='cya'&&san==='br') return v>0?['high','High']:['ok','OK'];
+  const [lo,hi]=c.target;
+  if(v<lo) return [ (r.param==='fc'||r.param==='br'||r.param==='ph') && v<lo*0.5 ? 'bad':'low','Low'];
+  if(v>hi) return [ (r.param==='ph'&&v>8.2)||((r.param==='fc'||r.param==='br')&&v>=10) ? 'bad':'high','High'];
+  return ['ok','OK'];
+}
+
+/* ---------- Readings ---------- */
+function renderReadings(){
+  const box=$('readings'); box.innerHTML='';
+  activeRows().forEach(r=>{
+    const id=rowKey(r), v=vals[id], [cls,label]=status(r,v), c=CATALOG[r.param];
+    const tgt = !c ? 'no target set' : r.param==='cya' ? (san==='cl'?'target 30–50 ppm':'not used w/ bromine') : `target ${c.target[0]}–${c.target[1]}${c.unit?' '+c.unit:''}`;
+    const lab = v==null?'—':(r.sw.find(s=>s[0]===v&&s[2])?.[2] ?? v);
+    const el=document.createElement('div'); el.className='reading';
+    el.innerHTML=`<div class="name"></div>
+      <div class="val">${sampled[id]?`<span class="sampled" style="background:${rgb2hex(sampled[id])}" title="Sampled color"></span>`:''}
+        <span>${lab}</span><span class="pill ${cls}">${label}</span></div><div class="sw"></div>`;
+    el.querySelector('.name').append(rowName(r)); const sp=document.createElement('span'); sp.className='range'; sp.textContent=tgt; el.querySelector('.name').append(sp);
+    let nearest=null; if(v!=null){let d=1e9;r.sw.forEach((s,i)=>{const dd=Math.abs(s[0]-v);if(dd<d){d=dd;nearest=i}})}
+    const sw=el.querySelector('.sw');
+    r.sw.forEach((s,i)=>{
+      const b=document.createElement('button'); b.type='button';
+      b.setAttribute('aria-pressed', i===nearest?'true':'false');
+      b.setAttribute('aria-label',`${rowName(r)} ${s[2]||s[0]}`);
+      b.innerHTML=`<i style="background:${s[1]}"></i>${s[2]||s[0]}`;
+      b.onclick=()=>{vals[id]=s[0]; delete sampled[id]; clearExample(); render()};
+      sw.appendChild(b);
+    });
+    box.appendChild(el);
+  });
+}
+
+/* ---------- Dose plan ---------- */
+const k = () => vol/1000;
+const oz = n => n<0.1?'a pinch':`${n.toFixed(n<1?2:1)} oz`;
+const tsp = (n,dens) => { const t=n/dens; return t<3?`≈ ${Math.max(0.25,Math.round(t*4)/4)} tsp`:`≈ ${Math.round(t/3*2)/2} tbsp`; };
+function renderPlan(){
+  const has = new Set(activeRows().map(r=>r.param));
+  const g = Object.fromEntries(Object.keys(CATALOG).map(p=>[p, has.has(p)?vals[p]??null:null]));
+  const steps=[], ta=g.ta, ph=g.ph, hd=g.hard;
+  if(ta!=null && ta<80){const d=2.4*k()*((90-ta)/10);steps.push(`<b>Raise alkalinity</b> to ~90 with baking soda: <span class="dose">${oz(d)} ${tsp(d,0.18)}</span>. Do this first; it steadies pH.`)}
+  if(ta!=null && ta>120){const d=3.4*k()*((ta-100)/10);steps.push(`<b>Lower alkalinity</b> toward 100 with dry acid, split into 2–3 doses a few hours apart: <span class="dose">${oz(d)} total</span>. Pour into the footwell with jets off, then run jets.`)}
+  if(ph!=null && ph<7.2 && !(ta!=null&&ta<80)){const d=0.6*k()*Math.ceil((7.4-ph)/0.2);steps.push(`<b>Raise pH</b> with soda ash (pH up): <span class="dose">${oz(d)} ${tsp(d,0.17)}</span>.`)}
+  if(ph!=null && ph<7.2 && ta!=null && ta<80) steps.push(`<b>Recheck pH</b> after the baking soda. Low TA usually drags pH down; add pH up only if it is still under 7.2.`);
+  if(ph!=null && ph>7.8){const d=0.8*k()*Math.ceil((ph-7.5)/0.2);steps.push(`<b>Lower pH</b> with dry acid (pH down): <span class="dose">${oz(d)} ${tsp(d,0.2)}</span>. Retest before adding more.`)}
+  if(hd!=null && hd<150){const d=2*k()*((175-hd)/10);steps.push(`<b>Raise hardness</b> with calcium chloride (hardness up): <span class="dose">${oz(d)}</span>. Low calcium in hot water can etch heater parts and cause foam.`)}
+  if(hd!=null && hd>400) steps.push(`<b>Hardness is high.</b> Expect scale on the heater and jets. Use a scale/stain sequestrant now and partially drain/refill at the next water change.`);
+  if(san==='cl'){
+    const fc=g.fc, tc=g.tc;
+    if(fc!=null && fc<3){const d=0.24*k()*(4-fc);steps.push(`<b>Raise free chlorine</b> to ~4 with dichlor: <span class="dose">${oz(d)} ${tsp(d,0.2)}</span>.`)}
+    if(fc!=null && fc>5) steps.push(`<b>Chlorine is ${fc>=10?'very ':''}high.</b> Leave the cover open with jets running and stay out until it drops under 5.`);
+    if(fc!=null && tc!=null && tc-fc>0.5){const d=0.24*k()*(10-(fc||0));steps.push(`<b>Shock it.</b> Combined chlorine is ${(tc-fc).toFixed(1)} ppm (total minus free). That's spent chlorine causing the chlorine smell. Shock to ~10 ppm with dichlor: <span class="dose">${oz(d)}</span>, or use non-chlorine shock (MPS) per its label. Cover open 20 min.`)}
+    if(g.cya!=null && g.cya>=100) steps.push(`<b>Cyanuric acid is high.</b> It weakens chlorine and only comes out by draining. Plan a partial drain/refill, or switch to unstabilized chlorine for a while.`);
+  } else {
+    const br=g.br;
+    if(br!=null && br<3) steps.push(`<b>Raise bromine.</b> Check the floater/feeder has tablets and open it a notch, then add MPS shock per its label to reactivate the bromide bank.`);
+    if(br!=null && br>6) steps.push(`<b>Bromine is high.</b> Close the floater down a setting and leave the cover open with jets on until it reads under 6.`);
+  }
+  const any = activeRows().some(r=>vals[rowKey(r)]!=null);
+  $('plan').innerHTML = steps.length ? `<ol class="plan">${steps.map(s=>`<li>${s}</li>`).join('')}</ol>`
+    : any ? `<p class="allgood">Everything reads in range. Soak away.</p>` : `<p class="hint">Enter a reading to get a plan.</p>`;
+}
+
+/* ---------- Strip photo sampler ---------- */
+const cv=$('cv'), ctx=cv.getContext('2d',{willReadFrequently:true});
+let img=null, white=null, targetIdx=0, marks=[];
+const targetList = () => [{white:true,name:'White ref'}, ...activeRows()];
+function renderTargets(){
+  const t=$('targets'); t.innerHTML='';
+  targetList().forEach((r,i)=>{
+    const b=document.createElement('button'); b.type='button'; b.setAttribute('aria-pressed', i===targetIdx?'true':'false');
+    const c = r.white ? (white?rgb2hex(white):null) : (sampled[rowKey(r)]?rgb2hex(sampled[rowKey(r)]):null);
+    b.innerHTML=`<span class="dot" style="background:${c||'transparent'}"></span>`; b.append(r.white?r.name:rowName(r));
+    b.onclick=()=>{targetIdx=i;renderTargets()};
+    t.appendChild(b);
+  });
+}
+function loadStrip(f){
+  loadPhoto(f,cv,im=>{img=im;marks=[];white=null;targetIdx=0;drawMarks(ctx,cv,img,marks);
+    $('photoBox').hidden=false;$('targets').hidden=false;renderTargets()});
+}
+$('file').addEventListener('change',e=>{const f=e.target.files[0]; if(f) loadStrip(f); e.target.value=''});
+cv.addEventListener('click',e=>{
+  if(!img) return;
+  const [x,y]=canvasPoint(cv,e), rad=Math.max(4,Math.round(cv.width/120));
+  ctx.drawImage(img,0,0,cv.width,cv.height);
+  const list=targetList(), t=list[targetIdx];
+  if(t.white){ white=sampleAt(ctx,x,y,rad,null); }
+  else{ const rgb=sampleAt(ctx,x,y,rad,white), id=rowKey(t);
+    sampled[id]=rgb; vals[id]=round(t.param,matchValue(t,rgb)); clearExample(); }
+  marks.push({x,y,r:rad*1.6}); drawMarks(ctx,cv,img,marks);
+  targetIdx=Math.min(list.length-1,targetIdx+1);
+  render();
+});
+
+/* ---------- Key manager ---------- */
+function renderKeySel(){
+  const sel=$('keySel'); sel.innerHTML='';
+  allKeys().forEach(kk=>{const o=document.createElement('option');o.value=kk.id;o.textContent=kk.name;sel.appendChild(o)});
+  sel.value=activeKey().id;
+  const custom=!activeKey().builtin;
+  $('editKey').disabled=!custom; $('delKey').disabled=!custom;
+}
+$('keySel').onchange=e=>{activeId=e.target.value;store.set('hts.active',activeId);
+  sampled={}; if(activeId!==BUILTIN.id){vals={};clearExample()} targetIdx=0; $('delConfirm').hidden=true; renderKeySel(); render()};
+$('delKey').onclick=()=>{$('delConfirm').hidden=false};
+$('delNo').onclick=()=>{$('delConfirm').hidden=true};
+$('delYes').onclick=async()=>{
+  const id=activeId; keys=keys.filter(k=>k.id!==id); store.set('hts.keys',keys);
+  activeId=BUILTIN.id; store.set('hts.active',activeId); $('delConfirm').hidden=true;
+  renderKeySel(); render();
+  if(dbCol){try{await dbCol.doc(id).delete()}catch(e){setSync('Deleted here; account copy not updated')}}
+};
+function setSync(t){$('keySync').textContent=t}
+
+/* ---------- Key builder ---------- */
+const bCv=$('bCv'), bCtx=bCv.getContext('2d',{willReadFrequently:true});
+let B=null; // {id,name,rows:[], cur:{param,label,sw:[[val,hex,label]]}, img, white, marks, mode}
+function paramOptions(){
+  const s=$('bParam'); s.innerHTML='';
+  Object.entries(CATALOG).forEach(([id,c])=>{const o=document.createElement('option');o.value=id;o.textContent=c.name;s.appendChild(o)});
+  const o=document.createElement('option');o.value='other';o.textContent='Other (no target)';s.appendChild(o);
+}
+function openBuilder(key){
+  B = {id:key?.id||('key-'+Date.now().toString(36)), name:key?.name||'', rows:key?JSON.parse(JSON.stringify(key.rows)):[],
+       cur:{param:'hard',label:'',sw:[]}, img:null, white:null, marks:[], mode:'white', editing:!!key};
+  $('bTitle').textContent = key?`Edit ${key.name}`:'New color key';
+  $('bName').value=B.name; $('bPhoto').hidden=true; $('bMode').hidden=true; $('bWhiteDot').style.background='transparent';
+  pickNextParam(); $('builder').hidden=false; $('bMsg').hidden=true; $('bRowMsg').hidden=true;
+  renderBuilder(); $('bName').focus();
+}
+function pickNextParam(){
+  const used=new Set(B.rows.map(r=>r.param));
+  B.cur={param:Object.keys(CATALOG).find(p=>!used.has(p))||'other',label:'',sw:[]};
+}
+function setMode(m){B.mode=m;$('bModeWhite').setAttribute('aria-pressed',m==='white');$('bModeSw').setAttribute('aria-pressed',m==='sw')}
+function parseVal(t){
+  const m=String(t).trim().match(/^(\d*\.?\d+)\s*[-–]\s*(\d*\.?\d+)$/);
+  if(m){const a=+m[1],b=+m[2];return {v:(a+b)/2,label:`${m[1]}–${m[2]}`}}
+  const n=parseFloat(t); return isNaN(n)?null:{v:n,label:null};
+}
+function renderBuilder(){
+  $('bParam').value=B.cur.param; $('bOtherWrap').hidden=B.cur.param!=='other'; $('bOther').value=B.cur.label;
+  const list=$('bSwList'); list.innerHTML='';
+  if(!B.cur.sw.length){const p=document.createElement('p');p.className='hint';p.textContent=B.img?'No swatches yet. Tap one on the photo.':'Load the bottle photo first.';list.appendChild(p)}
+  B.cur.sw.forEach((s,i)=>{
+    const r=document.createElement('div'); r.className='swrow';
+    r.innerHTML=`<i style="background:${s.hex}"></i>`;
+    const inp=document.createElement('input'); inp.type='text'; inp.inputMode='decimal'; inp.id='bsw'+i; inp.placeholder='value'; inp.value=s.text;
+    inp.oninput=()=>{s.text=inp.value};
+    const x=document.createElement('button'); x.type='button'; x.className='x'; x.textContent='×'; x.setAttribute('aria-label','Remove swatch');
+    x.onclick=()=>{B.cur.sw.splice(i,1); B.marks=B.marks.filter(m=>m.sw!==s); if(B.img)drawMarks(bCtx,bCv,B.img,B.marks); renderBuilder()};
+    r.append(inp,x); list.appendChild(r);
+  });
+  const rows=$('bRows'); rows.innerHTML='';
+  $('bRowsHint').textContent = B.rows.length?`Rows in this key (${B.rows.length})`:'No rows saved yet.';
+  B.rows.forEach((row,i)=>{
+    const d=document.createElement('div'); d.className='rowsum';
+    const b=document.createElement('b'); b.textContent=rowName(row);
+    const st=document.createElement('div'); st.className='strip'; row.sw.forEach(s=>{const c=document.createElement('i');c.style.background=s[1];c.title=s[2]||s[0];st.appendChild(c)});
+    const ed=document.createElement('button'); ed.type='button'; ed.className='btn ghost sm'; ed.textContent='Redo';
+    ed.onclick=()=>{B.cur={param:row.param,label:row.label||'',sw:row.sw.map(s=>({hex:s[1],text:s[2]?s[2].replace('–','-'):String(s[0])}))}; B.rows.splice(i,1); renderBuilder()};
+    const x=document.createElement('button'); x.type='button'; x.className='x'; x.textContent='×'; x.setAttribute('aria-label','Remove row');
+    x.onclick=()=>{B.rows.splice(i,1);renderBuilder()};
+    d.append(b,st,ed,x); rows.appendChild(d);
+  });
+}
+function rowMsg(t){const m=$('bRowMsg'); m.hidden=!t; m.textContent=t||''}
+$('newKey').onclick=()=>openBuilder(null);
+$('editKey').onclick=()=>{if(!activeKey().builtin) openBuilder(activeKey())};
+$('bCancel').onclick=()=>{$('builder').hidden=true;B=null};
+$('bName').oninput=e=>{B.name=e.target.value};
+$('bParam').onchange=e=>{B.cur.param=e.target.value;renderBuilder()};
+$('bOther').oninput=e=>{B.cur.label=e.target.value};
+$('bModeWhite').onclick=()=>setMode('white'); $('bModeSw').onclick=()=>setMode('sw');
+function loadBottle(f){
+  loadPhoto(f,bCv,im=>{B.img=im;B.marks=[];B.white=null;$('bWhiteDot').style.background='transparent';
+    drawMarks(bCtx,bCv,B.img,B.marks);$('bPhoto').hidden=false;$('bMode').hidden=false;setMode('white');renderBuilder()});
+}
+$('bFile').addEventListener('change',e=>{const f=e.target.files[0]; if(f) loadBottle(f); e.target.value=''});
+document.addEventListener('paste',e=>{
+  const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/')); if(!it) return;
+  const f=it.getAsFile(); if(!f) return; e.preventDefault();
+  if(B && !$('builder').hidden) loadBottle(f); else loadStrip(f);
+});
+bCv.addEventListener('click',e=>{
+  if(!B?.img) return;
+  const [x,y]=canvasPoint(bCv,e), rad=Math.max(4,Math.round(bCv.width/140));
+  bCtx.drawImage(B.img,0,0,bCv.width,bCv.height);
+  if(B.mode==='white'){
+    B.white=sampleAt(bCtx,x,y,rad,null); $('bWhiteDot').style.background=rgb2hex(B.white);
+    B.marks=B.marks.filter(m=>!m.white); B.marks.push({x,y,r:rad*1.6,white:true}); setMode('sw');
+  } else {
+    const s={hex:rgb2hex(sampleAt(bCtx,x,y,rad,B.white)),text:''};
+    B.cur.sw.push(s); B.marks.push({x,y,r:rad*1.6,sw:s});
+  }
+  drawMarks(bCtx,bCv,B.img,B.marks); renderBuilder();
+  if(B.mode==='sw' && B.cur.sw.length){const last=$('bsw'+(B.cur.sw.length-1)); last && last.focus({preventScroll:true})}
+});
+$('bClearRow').onclick=()=>{B.marks=B.marks.filter(m=>!B.cur.sw.includes(m.sw)); B.cur.sw=[]; if(B.img)drawMarks(bCtx,bCv,B.img,B.marks); rowMsg(''); renderBuilder()};
+$('bAddRow').onclick=()=>{
+  const c=B.cur;
+  if(c.sw.length<2) return rowMsg('Tap at least 2 swatches for this row.');
+  const parsed=c.sw.map(s=>parseVal(s.text));
+  if(parsed.some(p=>!p)) return rowMsg('Give every swatch a number, like 7.2 or 30-50.');
+  if(c.param==='other'&&!c.label.trim()) return rowMsg('Name this row.');
+  if(B.rows.some(r=>r.param===c.param && c.param!=='other')) return rowMsg(`${CATALOG[c.param].name} is already in this key. Redo that row instead.`);
+  const sw=c.sw.map((s,i)=>parsed[i].label?[parsed[i].v,s.hex,parsed[i].label]:[parsed[i].v,s.hex]).sort((a,b)=>a[0]-b[0]);
+  const row={param:c.param,sw}; if(c.param==='other') row.label=c.label.trim();
+  B.rows.push(row);
+  B.marks=B.marks.filter(m=>!c.sw.includes(m.sw)); if(B.img)drawMarks(bCtx,bCv,B.img,B.marks);
+  rowMsg(''); pickNextParam(); renderBuilder();
+};
+$('bSave').onclick=async()=>{
+  const m=$('bMsg'); m.hidden=false; m.className='msg';
+  if(!B.name.trim()){m.textContent='Give the key a name.';return}
+  if(B.cur.sw.length){m.textContent='You have an unsaved row. Save it or clear it first.';return}
+  if(!B.rows.length){m.textContent='Add at least one row.';return}
+  const order=['hard','fc','br','tc','cya','ta','ph'];
+  const rows=[...B.rows].sort((a,b)=>(order.indexOf(a.param)+1||99)-(order.indexOf(b.param)+1||99));
+  const key={id:B.id,name:B.name.trim(),rows,updated:new Date().toISOString()};
+  keys=keys.filter(k=>k.id!==key.id).concat(key); store.set('hts.keys',keys);
+  activeId=key.id; store.set('hts.active',activeId);
+  vals={}; sampled={}; clearExample();
+  $('builder').hidden=true; B=null; renderKeySel(); render();
+  if(dbCol){try{await dbCol.doc(key.id).set({name:key.name,rows:JSON.stringify(key.rows),updated:key.updated});setSync('Saved to your account')}
+    catch(e){setSync('Saved on this device only')}}
+};
+
+/* ---------- Account sync (db) ---------- */
+(async()=>{
+  if(!window.claude?.use) {setSync('Saved on this device');return}
+  try{
+    const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);
+    const uid = user ? await user.id() : null;
+    if(!db||!uid){setSync('Saved on this device');return}
+    dbCol=db.collection('data/users/'+uid);
+    const t=setTimeout(()=>setSync('Saved on this device'),10000);
+    dbCol.onSnapshot(snap=>{
+      clearTimeout(t);
+      const remote=snap.docs.filter(d=>d.id.startsWith('key-')).map(d=>{const x=d.data();
+        try{return {id:d.id,name:x.name,rows:JSON.parse(x.rows),updated:x.updated}}catch(e){return null}}).filter(Boolean);
+      // push local-only keys up once (e.g. made before sync existed)
+      keys.filter(k=>!remote.some(r=>r.id===k.id)).forEach(k=>{
+        if(!k._pushed){k._pushed=true; dbCol.doc(k.id).set({name:k.name,rows:JSON.stringify(k.rows),updated:k.updated||''}).catch(()=>{})}});
+      const merged=[...remote, ...keys.filter(k=>!remote.some(r=>r.id===k.id))];
+      keys=merged.map(({_pushed,...k})=>k); store.set('hts.keys',keys);
+      if(isExample && activeKey().id!==BUILTIN.id){vals={};clearExample()}
+      setSync('Synced to your account'); renderKeySel(); render();
+    },()=>{clearTimeout(t);setSync('Saved on this device')});
+  }catch(e){setSync('Saved on this device')}
+})();
+
+/* ---------- Controls ---------- */
+function clearExample(){ if(isExample){ isExample=false; $('exTag').hidden=true; } }
+function setSan(s){ san=s; store.set('hts.san',s);
+  $('sanCl').setAttribute('aria-pressed',s==='cl'); $('sanBr').setAttribute('aria-pressed',s==='br');
+  if(s==='br' && vals.br==null && isExample) vals.br=2;
+  targetIdx=Math.min(targetIdx,targetList().length-1); render(); }
+$('sanCl').onclick=()=>setSan('cl'); $('sanBr').onclick=()=>setSan('br');
+$('vol').value=vol;
+$('vol').addEventListener('input',e=>{const v=parseFloat(e.target.value); if(v>0){vol=v;store.set('hts.vol',v);renderPlan()}});
+
+function render(){ renderReadings(); renderPlan(); if(img) renderTargets(); }
+if(activeId!==BUILTIN.id && allKeys().some(k=>k.id===activeId)){vals={};isExample=false;$('exTag').hidden=true}
+paramOptions(); renderKeySel(); setSan(san);
+</script>
+
+</body>
+</html>
